@@ -1,0 +1,52 @@
+@let user = detailUser$();
+
+<div class="detail-display">
+  <img [src]="user.avatar" />
+  <div class="content">
+    <div class="header">
+      @if(user.type !== 'center'){
+      <div class="icon" [ngClass]="user.type"></div>
+      }
+      <h3>{{user.displayName}}</h3>
+    </div>
+
+    @if(user.type === 'center'){
+
+    <div class="connection-info">
+      <h4 [style.color]='"#1f77b4"'>{{user.followers || 0}}</h4>
+      <p>Followers</p>
+    </div>
+
+    <div class="connection-info">
+      <h4 [style.color]='"#ff7f0e"'>{{user.following || 0}}</h4>
+      <p>Following</p>
+    </div>
+
+    <button mat-raised-button (click)="connectionsEmitter.emit()">
+      View first 30 connections
+    </button>
+
+    } @else {
+    <button mat-raised-button (click)="setUserEmitter.emit(user)">
+      See connections
+    </button>
+    }
+  </div>
+
+  <div class="button-wrapper">
+    <button
+      mat-mini-fab
+      matTooltip="Navigate to GitHub"
+      (click)="navigateEmitter.emit(user.url)"
+    >
+      <mat-icon>language</mat-icon>
+    </button>
+    <button
+      mat-mini-fab
+      matTooltip="Close detail panel"
+      (click)="closeEmitter.emit()"
+    >
+      <mat-icon>close</mat-icon>
+    </button>
+  </div>
+</div>

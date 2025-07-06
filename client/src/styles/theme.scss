@@ -1,0 +1,16 @@
+@use "@angular/material" as mat;
+@use "./m3-theme" as m3-theme;
+@include mat.core();
+html {
+  @include mat.core-theme(m3-theme.$dark-theme);
+  @include mat.all-component-themes(m3-theme.$dark-theme);
+  @include mat.color-variants-backwards-compatibility(m3-theme.$dark-theme);
+}
+
+$color-variants: (secondary, tertiary);
+
+@each $variant in $color-variants {
+  .mat-#{$variant} {
+    @include mat.button-color(m3-theme.$dark-theme, $color-variant: $variant);
+  }
+}

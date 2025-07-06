@@ -1,0 +1,68 @@
+:host {
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 20px;
+}
+
+.viz-container {
+  box-sizing: border-box;
+  padding: 20px;
+  border-radius: 5px;
+  background-color: var(--md-sys-color-surface-container-high);
+  box-shadow: var(--mat-app-elevation-shadow-level-4);
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.viz-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+
+  form {
+    flex: 1;
+  }
+}
+
+.graph-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex: 1;
+}
+
+svg {
+  border-radius: 5px;
+  background-color: rgba(0, 0, 0, 0.25);
+  box-shadow: inset -4px -2px 13px 3px rgba(0, 0, 0, 0.5);
+  width: 100%;
+}
+
+.graph-legend {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  font-size: 14px;
+
+  .legend-item {
+    width: 20px;
+    height: 20px;
+    border-radius: 3px;
+  }
+
+  .follower {
+    background-color: #1f77b4;
+  }
+
+  .following {
+    background-color: #ff7f0e;
+  }
+
+  .bidirectional {
+    background-color: #9c27b0;
+  }
+}

@@ -1,0 +1,26 @@
+@let isDarkMode = themeSvc.isDarkValue$(); @let user = authSvc.user$();
+
+<div class="app-wrapper">
+  <div class="splash-wrapper" [class.hide-splash]="user">
+    <video type="video/mp4" playsinline loop autoplay [muted]="true">
+      <source src="assets/videos/landing-bg.mp4" type="video/mp4" />
+    </video>
+    <div class="overlay-container">
+      <div class="overlay-text">
+        <h1>Search and explore GitHub connections.</h1>
+      </div>
+    </div>
+  </div>
+
+  <div class="router-wrapper">
+    <header class="routed-header">
+      <h4><span>Hi,</span> {{user?.email || "Please sign in"}}</h4>
+      <mat-slide-toggle (toggleChange)="toggleTheme()" [checked]="isDarkMode">
+      </mat-slide-toggle>
+      @if(user) {
+      <button mat-icon-button (click)="logout()"><mat-icon>logout</mat-icon></button>
+      }
+    </header>
+    <router-outlet></router-outlet>
+  </div>
+</div>

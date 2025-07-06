@@ -1,0 +1,50 @@
+<div class="viz-container">
+  <div class="viz-toolbar">
+    <form>
+      <mat-form-field class="full-width" appearance="outline">
+        <mat-label>GitHub User</mat-label>
+        <input
+          type="text"
+          matInput
+          placeholder="Search GitHub Users"
+          [formControl]="formControl"
+          [matAutocomplete]="auto"
+        />
+        <mat-autocomplete
+          #auto="matAutocomplete"
+          [displayWith]="displayFn"
+          (optionSelected)="userSelectedEmitter.emit($event.option.value)"
+        >
+          @for (option of filteredOptions$(); track $index) {
+          <mat-option [value]="option">{{option.displayName}}</mat-option>
+          }
+        </mat-autocomplete>
+      </mat-form-field>
+    </form>
+
+    <div class="graph-legend">
+      <div class="legend-item follower"></div>
+      <p>Follower</p>
+
+      <div class="legend-item following"></div>
+      <p>Following</p>
+
+      <div class="legend-item bidirectional"></div>
+      <p>Bidirectional</p>
+    </div>
+  </div>
+
+  <div class="graph-container">
+    <svg #graph width="100%" height="100%"></svg>
+  </div>
+</div>
+
+@if(detailUser$()){
+<app-detail-display
+  [detailUser$]="detailUser$()!"
+  (closeEmitter)="detailUser$.set(null)"
+  (connectionsEmitter)="connectionsEmitter.emit()"
+  (setUserEmitter)="userSelectedEmitter.emit($event)"
+  (navigateEmitter)="navigateEmitter.emit($event)"
+></app-detail-display>
+}
