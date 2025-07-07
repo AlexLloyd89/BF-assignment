@@ -1,6 +1,7 @@
 import {
   AfterViewInit,
   Component,
+  computed,
   effect,
   ElementRef,
   input,
@@ -26,6 +27,8 @@ import * as d3 from 'd3';
 import { BehaviorSubject, debounceTime } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { DetailDisplayComponent } from '../../components/detail-display/detail-display';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatProgressBarModule } from '@angular/material/progress-bar';
 
 @Component({
   selector: 'app-connect',
@@ -36,6 +39,8 @@ import { DetailDisplayComponent } from '../../components/detail-display/detail-d
     MatAutocompleteModule,
     ReactiveFormsModule,
     DetailDisplayComponent,
+    MatProgressSpinnerModule,
+    MatProgressBarModule,
   ],
   templateUrl: './connect.html',
   styleUrl: './connect.scss',
@@ -43,10 +48,16 @@ import { DetailDisplayComponent } from '../../components/detail-display/detail-d
 export class ConnectComponent implements AfterViewInit, OnDestroy {
   worker!: Worker;
 
+  showOverlay$ = computed(
+    () => this.loading$() || !this.graphData$()?.nodes?.length
+  );
+
   detailUser$ = model<(GitHubDetailUser & { type: NodeType }) | null>(null);
 
   @Input() formControl!: FormControl<string>;
   filteredOptions$ = input<GitHubSearchUser[]>([]);
+  loading$ = input<boolean>();
+  searchLoading$ = input<boolean>();
   graphData$ = model<{ nodes: GraphNode[]; links: GraphLink[] }>();
 
   connectionsEmitter = output<void>();
@@ -139,7 +150,6 @@ export class ConnectComponent implements AfterViewInit, OnDestroy {
       .enter()
       .append('g')
       .on('click', (event: PointerEvent, node: GraphNode) => {
-        console.log('node', node);
         if (!node?.data) return;
         this.detailUser$.set({
           ...node.data,
@@ -165,7 +175,7 @@ export class ConnectComponent implements AfterViewInit, OnDestroy {
       .attr('width', 40)
       .attr('height', 40)
       .attr('x', -20)
-      .attr('y', -20);
+      .attr('y', -20)
 
     // Follower and following group nodes as colored circles
     nodeGroup

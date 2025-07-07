@@ -17,6 +17,7 @@ import { NgClass } from '@angular/common';
 })
 export class DetailDisplayComponent {
   detailUser$ = input.required<GitHubDetailUser & { type: NodeType }>();
+  loading$ = input<boolean>();
   closeEmitter = output<void>();
   connectionsEmitter = output<void>();
   navigateEmitter = output<string>();

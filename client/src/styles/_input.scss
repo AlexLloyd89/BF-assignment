@@ -1,0 +1,43 @@
+@use "@angular/material" as mat;
+
+@mixin base($theme) {
+  .bf-input {
+    width: 100%;
+
+    .mdc-line-ripple {
+      display: none;
+    }
+
+    .mdc-text-field {
+      box-shadow: (
+        inset -2px -2px 4px rgba(255, 255, 255, 0.05),
+        inset 2px 2px 4px rgba(0, 0, 0, 0.25)
+      );
+
+      border-radius: 5px;
+
+      &:not(.mdc-text-field--invalid) {
+        .mdc-line-ripple::before {
+          border-bottom-width: 0px;
+        }
+      }
+    }
+  }
+}
+
+@mixin color($theme) {
+  .bf-input {
+    .mdc-text-field:not(.mdc-text-field--disabled) {
+      background-color: rgba(255, 255, 255, 0.03);
+    }
+  }
+}
+
+@mixin theme($theme) {
+  @if mat.theme-has($theme, base) {
+    @include base($theme);
+  }
+  @if mat.theme-has($theme, color) {
+    @include color($theme);
+  }
+}

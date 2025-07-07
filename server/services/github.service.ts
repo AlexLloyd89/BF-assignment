@@ -47,30 +47,16 @@ export async function getUserByUsername(username: string) {
   };
 }
 
-async function getAllPaginated(url: string): Promise<any[]> {
-  let results: any[] = [];
-  let page = 1;
-  let hasMore = true;
+export async function getFollowers(username: string, page: number = 1) {
+  const res = await axios.get(`${GITHUB_API}/users/${username}/followers`, {
+    headers,
+    params: {
+      page,
+      per_page: 100,
+    },
+  });
 
-  while (hasMore) {
-    const res = await axios.get(url, {
-      headers,
-      params: { per_page: 100, page },
-    });
-
-    const pageData = res.data;
-    results = results.concat(pageData);
-    hasMore = pageData.length === 100;
-    page++;
-  }
-
-  return results;
-}
-
-export async function getFollowers(username: string) {
-  const allFollowers = await getAllPaginated(`${GITHUB_API}/users/${username}/followers`);
-
-  return allFollowers.map((user: any) => ({
+  return res.data.map((user: any) => ({
     avatar: user.avatar_url,
     followersUrl: user.followers_url,
     followingUrl: user.following_url,
@@ -80,10 +66,16 @@ export async function getFollowers(username: string) {
   }));
 }
 
-export async function getFollowing(username: string) {
-  const allFollowing = await getAllPaginated(`${GITHUB_API}/users/${username}/following`);
+export async function getFollowing(username: string, page: number = 1) {
+  const res = await axios.get(`${GITHUB_API}/users/${username}/following`, {
+    headers,
+    params: {
+      page,
+      per_page: 100,
+    },
+  });
 
-  return allFollowing.map((user: any) => ({
+  return res.data.map((user: any) => ({
     avatar: user.avatar_url,
     followersUrl: user.followers_url,
     followingUrl: user.following_url,

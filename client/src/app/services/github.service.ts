@@ -1,6 +1,6 @@
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Injectable } from '@angular/core';
-import { Observable } from 'rxjs';
+import { map, Observable } from 'rxjs';
 import { GitHubDetailUser, GitHubSearchUser } from '../models/app.model';
 import { environment } from '../../environment';
 
@@ -32,21 +32,37 @@ export class GithubService {
     });
   }
 
-  getFollowers(username: string): Observable<GitHubSearchUser[]> {
-    return this.http.get<GitHubSearchUser[]>(
-      `${this.apiUrl}/users/${username}/followers`,
-      {
+  getFollowers(
+    username: string,
+    page: number = 1
+  ): Observable<{ users: GitHubSearchUser[]; hasMore: boolean }> {
+    return this.http
+      .get<GitHubSearchUser[]>(`${this.apiUrl}/users/${username}/followers`, {
+        params: { page },
         headers: this.getHeaders(),
-      }
-    );
+      })
+      .pipe(
+        map((users) => ({
+          users,
+          hasMore: users.length >= page * 100,
+        }))
+      );
   }
 
-  getFollowing(username: string): Observable<GitHubSearchUser[]> {
-    return this.http.get<GitHubSearchUser[]>(
-      `${this.apiUrl}/users/${username}/following`,
-      {
+  getFollowing(
+    username: string,
+    page: number = 1
+  ): Observable<{ users: GitHubSearchUser[]; hasMore: boolean }> {
+    return this.http
+      .get<GitHubSearchUser[]>(`${this.apiUrl}/users/${username}/following`, {
+        params: { page },
         headers: this.getHeaders(),
-      }
-    );
+      })
+      .pipe(
+        map((users) => ({
+          users,
+          hasMore: users.length >= page * 100,
+        }))
+      );
   }
 }

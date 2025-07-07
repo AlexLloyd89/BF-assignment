@@ -22,13 +22,21 @@
       <p>Following</p>
     </div>
 
-    <button mat-raised-button (click)="connectionsEmitter.emit()">
-      View first 30 connections
+    <button
+      class="bf-button"
+      [disabled]="loading$()"
+      (click)="connectionsEmitter.emit()"
+    >
+      View all connections
     </button>
 
     } @else {
-    <button mat-raised-button (click)="setUserEmitter.emit(user)">
-      See connections
+    <button
+      class="bf-button"
+      [disabled]="loading$()"
+      (click)="setUserEmitter.emit(user)"
+    >
+      Focus user
     </button>
     }
   </div>

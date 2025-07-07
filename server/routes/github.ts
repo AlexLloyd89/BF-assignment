@@ -35,28 +35,29 @@ router.get('/:username', async (req: Request, res: Response) => {
   }
 });
 
-// GET /api/github/users/:username/followers
+// GET /api/github/users/:username/followers?page=1&perPage=30
 router.get('/:username/followers', async (req: Request, res: Response) => {
   const { username } = req.params;
+  const page = parseInt(req.query.page as string) || 1;
 
   try {
-    const followers = await getFollowers(username);
+    const followers = await getFollowers(username, page);
     res.json(followers);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch followers' });
   }
 });
 
-// GET /api/github/users/:username/following
+// GET /api/github/users/:username/following?page=1&perPage=30
 router.get('/:username/following', async (req: Request, res: Response) => {
   const { username } = req.params;
+  const page = parseInt(req.query.page as string) || 1;
 
   try {
-    const following = await getFollowing(username);
+    const following = await getFollowing(username, page);
     res.json(following);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch following' });
   }
 });
-
 export default router;

@@ -1,9 +1,14 @@
 @let loading = loading$();
 
 <form [formGroup]="form" (ngSubmit)="handleSubmit()" class="form-wrapper">
-  <mat-form-field appearance="outline" class="full-width mb-1">
+  <mat-form-field appearance="fill" class="bf-input mb-1">
     <mat-label>Email</mat-label>
-    <input matInput formControlName="email" placeholder="you@example.com" autofocus />
+    <input
+      matInput
+      formControlName="email"
+      placeholder="you@example.com"
+      autofocus
+    />
     @if(form.get('email')?.hasError('required')){
     <mat-error> Email is required </mat-error>
     } @else if(form.get('email')?.hasError('email')){
@@ -11,7 +16,7 @@
     }
   </mat-form-field>
 
-  <mat-form-field appearance="outline" class="full-width mb-1">
+  <mat-form-field appearance="fill" class="bf-input mb-1">
     <mat-label>Password</mat-label>
     <input
       matInput
@@ -25,12 +30,10 @@
     }
   </mat-form-field>
 
-  <button
-    mat-flat-button
-    color="primary"
-    class="full-width"
-    [disabled]="form.invalid || loading"
-  >
+  <button class="bf-button" [disabled]="form.invalid || loading">
     {{loading ? 'Loading...' : 'Sign In'}}
   </button>
+  <!-- <button mat-button class="bf-button" [disabled]="form.invalid || loading">
+    {{loading ? 'Loading...' : 'Sign In'}}
+  </button> -->
 </form>

@@ -33,6 +33,23 @@
   justify-content: center;
   align-items: center;
   flex: 1;
+  position: relative;
+}
+
+.display-overlay {
+  position: absolute;
+  height: 100%;
+  width: 100%;
+  background-color: rgba(0, 0, 0, 0.75);
+  border-radius: 5px;
+  box-shadow: var(--mat-app-elevation-shadow-level-4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  h1 {
+    color: white;
+  }
 }
 
 svg {
