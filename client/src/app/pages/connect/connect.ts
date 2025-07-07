@@ -41,11 +41,13 @@ import { DetailDisplayComponent } from '../../components/detail-display/detail-d
   styleUrl: './connect.scss',
 })
 export class ConnectComponent implements AfterViewInit, OnDestroy {
+  worker!: Worker;
+
   detailUser$ = model<(GitHubDetailUser & { type: NodeType }) | null>(null);
 
   @Input() formControl!: FormControl<string>;
   filteredOptions$ = input<GitHubSearchUser[]>([]);
-  graphData$ = input<{ nodes: GraphNode[]; links: GraphLink[] }>();
+  graphData$ = model<{ nodes: GraphNode[]; links: GraphLink[] }>();
 
   connectionsEmitter = output<void>();
   userSelectedEmitter = output<GitHubSearchUser>();
@@ -53,6 +55,9 @@ export class ConnectComponent implements AfterViewInit, OnDestroy {
 
   resizeObserver$!: ResizeObserver;
   resizeSubject$ = new BehaviorSubject(0);
+
+  nodes: GraphNode[] = [];
+  links: GraphLink[] = [];
 
   @ViewChild('graph', { static: true }) graphSvgref!: ElementRef<SVGElement>;
 
@@ -105,22 +110,14 @@ export class ConnectComponent implements AfterViewInit, OnDestroy {
 
     const graphGroup = svg.append('g');
 
-    const simulation = d3
-      .forceSimulation<GraphNode>(graph.nodes)
-      .force(
-        'link',
-        d3
-          .forceLink<GraphNode, GraphLink>(graph.links)
-          .id((d) => d.id)
-          .distance(100)
-      )
-      .force('charge', d3.forceManyBody().strength(-200))
-      .force('center', d3.forceCenter(width / 2, height / 2))
-      .force('collide', d3.forceCollide().radius(40));
+    const drag = d3
+      .drag<SVGGElement, GraphNode>()
+      .on('start', dragstarted)
+      .on('drag', dragged)
+      .on('end', dragended);
 
     const link = graphGroup
       .append('g')
-      .attr('stroke', '#aaa')
       .selectAll('line')
       .data(graph.links)
       .enter()
@@ -142,19 +139,14 @@ export class ConnectComponent implements AfterViewInit, OnDestroy {
       .enter()
       .append('g')
       .on('click', (event: PointerEvent, node: GraphNode) => {
+        console.log('node', node);
         if (!node?.data) return;
         this.detailUser$.set({
           ...node.data,
           type: node.type,
         } as GitHubDetailUser & { type: NodeType });
       })
-      .call(
-        d3
-          .drag<SVGGElement, any>()
-          .on('start', dragstarted)
-          .on('drag', dragged)
-          .on('end', dragended)
-      );
+      .call(drag);
 
     const zoom = d3
       .zoom<SVGSVGElement, unknown>()
@@ -201,32 +193,84 @@ export class ConnectComponent implements AfterViewInit, OnDestroy {
       return `${d.id}\nFollowers: ${d.followersCount}\nFollowing: ${d.followingCount}`;
     });
 
-    // Update positions on tick
-    simulation.on('tick', () => {
-      link
-        .attr('x1', (d) => (d.source as GraphNode).x ?? 0)
-        .attr('y1', (d) => (d.source as GraphNode).y ?? 0)
-        .attr('x2', (d) => (d.target as GraphNode).x ?? 0)
-        .attr('y2', (d) => (d.target as GraphNode).y ?? 0);
-
-      nodeGroup.attr('transform', (d) => `translate(${d.x ?? 0}, ${d.y ?? 0})`);
+    const worker = new Worker(new URL('./force.worker.ts', import.meta.url), {
+      type: 'module',
     });
 
-    function dragstarted(event: { active?: number }, d: GraphNode) {
-      if (!event.active) simulation.alphaTarget(0.3).restart();
-      d.fx = d.x;
-      d.fy = d.y;
+    worker.postMessage({
+      type: 'init',
+      payload: {
+        nodes: graph.nodes,
+        links: graph.links,
+        width,
+        height,
+      },
+    });
+
+    let lastUpdate = 0;
+    const MIN_INTERVAL = 30; // ms
+
+    worker.onmessage = ({ data }) => {
+      const now = performance.now();
+      if (now - lastUpdate < MIN_INTERVAL) return;
+
+      lastUpdate = now;
+
+      if (data.type !== 'tick') return;
+
+      const updatedNodes = data.nodes;
+      const updatedLinks = data.links;
+
+      // Create a map of node id -> node object for quick lookup
+      const nodeById = new Map(updatedNodes.map((n: GraphNode) => [n.id, n]));
+
+      // Replace link source and target IDs with node objects
+      const resolvedLinks = updatedLinks.map((link: GraphLink) => ({
+        ...link,
+        source:
+          typeof link.source === 'string'
+            ? nodeById.get(link.source)
+            : link.source,
+        target:
+          typeof link.target === 'string'
+            ? nodeById.get(link.target)
+            : link.target,
+      }));
+
+      // Update D3 selections with nodes and resolved links:
+      nodeGroup
+        .data(updatedNodes, (d: GraphNode) => d.id)
+        .attr('transform', (d) => `translate(${d.x ?? 0}, ${d.y ?? 0})`);
+
+      link
+        .data(resolvedLinks)
+        .attr('x1', (d: any) => d.source?.x ?? 0)
+        .attr('y1', (d: any) => d.source?.y ?? 0)
+        .attr('x2', (d: any) => d.target?.x ?? 0)
+        .attr('y2', (d: any) => d.target?.y ?? 0);
+    };
+
+    // Drag event handlers communicate with worker
+    function dragstarted(event: PointerEvent, d: GraphNode) {
+      worker.postMessage({ type: 'kick', alpha: 0.3 });
+      worker.postMessage({
+        type: 'drag',
+        payload: { id: d.id, fx: d.x, fy: d.y },
+      });
     }
 
     function dragged(event: PointerEvent, d: GraphNode) {
-      d.fx = event.x;
-      d.fy = event.y;
+      worker.postMessage({
+        type: 'drag',
+        payload: { id: d.id, fx: event.x, fy: event.y },
+      });
     }
 
-    function dragended(event: { active?: number }, d: GraphNode) {
-      if (!event.active) simulation.alphaTarget(0);
-      d.fx = null;
-      d.fy = null;
+    function dragended(event: PointerEvent, d: GraphNode) {
+      worker.postMessage({
+        type: 'end',
+        payload: { id: d.id },
+      });
     }
   }
 }

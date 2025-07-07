@@ -23,6 +23,7 @@
     "strictTemplates": true
   },
   "files": [],
+  "lib": ["esnext", "dom", "webworker"],
   "references": [
     {
       "path": "./tsconfig.app.json"

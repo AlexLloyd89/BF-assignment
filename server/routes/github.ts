@@ -10,8 +10,6 @@ const router = express.Router();
 
 // GET /api/github/users/search?q=query
 router.get('/search', async (req: Request, res: Response) => {
-  console.log('🔥 Hit /users/search route');
-  console.log('Query:', req.query);
   const query = req.query.q as string;
   if (!query) {
     res.status(400).json({ error: 'Query parameter "q" is required' });
