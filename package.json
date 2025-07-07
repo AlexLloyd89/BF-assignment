@@ -1,0 +1,10 @@
+{
+  "devDependencies": {
+    "concurrently": "^9.2.0"
+  },
+  "scripts": {
+    "start:client": "cd client && ng serve",
+    "start:server": "nodemon --loader ts-node/esm server.ts",
+    "start": "concurrently -n BACKEND,FRONTEND -c blue,green \"npm run dev --prefix server\" \"npm run start --prefix client\""
+  }
+}
