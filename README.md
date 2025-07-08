@@ -19,7 +19,7 @@ To run the application on the `master` branch:
 
 The `feat/extra`s branch includes both client and server parts with additional setup:
 
-To run the application on the `master` branch:
+To run the application on the `feat/extras` branch:
 
 1. At the root of the project, install dependencies:
 
