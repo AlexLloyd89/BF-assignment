@@ -42,7 +42,7 @@
     </div>
   </div>
 
-  <div class="graph-container">
+  <div class="graph-container" #container>
     @if(showOverlay$()){
     <div class="display-overlay">
       @if(loading$()){
@@ -52,7 +52,11 @@
       }
     </div>
     }
-    <svg #graph width="100%" height="100%"></svg>
+    <app-force
+      [graphData$]="graphData$()"
+      [svgSize$]="svgSize$()"
+      (detailUserEmitter)="detailUser$.set($event)"
+    ></app-force>
   </div>
 </div>
 

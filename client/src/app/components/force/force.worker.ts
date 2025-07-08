@@ -1,6 +1,5 @@
 /// <reference lib="webworker" />
 
-import { tree } from 'd3';
 import {
   forceSimulation,
   forceLink,
@@ -34,12 +33,6 @@ interface InitMessage {
   };
 }
 
-interface TickMessage {
-  type: 'tick';
-  nodes: GraphNode[];
-  links: GraphLink[];
-}
-
 interface DragMessage {
   type: 'drag';
   payload: { id: string; fx: number; fy: number };
@@ -64,6 +57,9 @@ addEventListener('message', ({ data }: { data: IncomingMessage }) => {
     case 'init': {
       const { nodes, links, width, height } = data.payload;
 
+      let tickCount = 0;
+      const MAX_TICKS = 300;
+
       simulation = forceSimulation<GraphNode>(nodes)
         .force(
           'link',
@@ -74,10 +70,16 @@ addEventListener('message', ({ data }: { data: IncomingMessage }) => {
         .force('charge', forceManyBody().strength(-50))
         .force('center', forceCenter(width / 2, height / 2))
         .force('collide', forceCollide().radius(35))
-        .velocityDecay(0.4)
+        .velocityDecay(0.25)
         .alpha(0.8)
         .alphaDecay(0.02)
         .on('tick', () => {
+          tickCount++;
+
+          if (tickCount >= MAX_TICKS) {
+            simulation.stop();
+          }
+
           postMessage({
             type: 'tick',
             nodes: simulation.nodes().map((n) => ({
@@ -135,5 +137,6 @@ addEventListener('message', ({ data }: { data: IncomingMessage }) => {
       }
       break;
     }
+
   }
 });

@@ -1,0 +1,12 @@
+:host {
+  display: block;
+  height: 100%;
+  width: 100%;
+}
+
+svg {
+  border-radius: 5px;
+  background-color: rgba(0, 0, 0, 0.25);
+  box-shadow: inset -4px -2px 13px 3px rgba(0, 0, 0, 0.5);
+  width: 100%;
+}

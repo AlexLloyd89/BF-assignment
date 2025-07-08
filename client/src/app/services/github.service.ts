@@ -1,6 +1,6 @@
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Injectable } from '@angular/core';
-import { map, Observable } from 'rxjs';
+import { firstValueFrom, map, Observable, take } from 'rxjs';
 import { GitHubDetailUser, GitHubSearchUser } from '../models/app.model';
 import { environment } from '../../environment';
 
@@ -44,7 +44,7 @@ export class GithubService {
       .pipe(
         map((users) => ({
           users,
-          hasMore: users.length >= page * 100,
+          hasMore: users.length === 100,
         }))
       );
   }
@@ -61,8 +61,42 @@ export class GithubService {
       .pipe(
         map((users) => ({
           users,
-          hasMore: users.length >= page * 100,
+          hasMore: users.length === 100,
         }))
       );
+  }
+
+  async fetchUsersInBatches(
+    type: 'followers' | 'following',
+    username: string,
+    startPage: number,
+  ): Promise<GitHubSearchUser[]> {
+    const allUsers: GitHubSearchUser[] = [];
+
+    for (let i = 0; i < 10; i++) {
+      const page = startPage + i;
+      const users = await firstValueFrom(
+        this.getUsers(type, username, page).pipe(take(1))
+      );
+      allUsers.push(...users);
+
+      if (users.length < 100) break;
+    }
+
+    return allUsers;
+  }
+
+  getUsers(
+    type: 'followers' | 'following',
+    username: string,
+    page: number
+  ): Observable<GitHubSearchUser[]> {
+    return this.http.get<GitHubSearchUser[]>(
+      `${this.apiUrl}/users/${username}/${type}`,
+      {
+        params: { page },
+        headers: this.getHeaders(),
+      }
+    );
   }
 }

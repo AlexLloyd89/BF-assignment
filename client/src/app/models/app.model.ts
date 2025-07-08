@@ -65,3 +65,12 @@ export enum LinkType {
   FOLLOWING = 'following',
   MUTUAL = 'mutual',
 }
+
+export interface GitHubCacheEntry {
+  id: string; // userId
+  user: GitHubDetailUser;
+  followers: GitHubSearchUser[];
+  following: GitHubSearchUser[];
+  graphData: { nodes: GraphNode[]; links: GraphLink[] };
+  updatedAt: number;
+}

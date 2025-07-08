@@ -9,6 +9,7 @@ import {
   model,
   OnDestroy,
   output,
+  signal,
   ViewChild,
 } from '@angular/core';
 import { FormControl, FormsModule, ReactiveFormsModule } from '@angular/forms';
@@ -24,11 +25,12 @@ import {
   NodeType,
 } from '../../models/app.model';
 import * as d3 from 'd3';
-import { BehaviorSubject, debounceTime } from 'rxjs';
+import { BehaviorSubject, debounceTime, skip } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { DetailDisplayComponent } from '../../components/detail-display/detail-display';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
+import { ForceComponent } from '../../components/force/force';
 
 @Component({
   selector: 'app-connect',
@@ -41,16 +43,19 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
     DetailDisplayComponent,
     MatProgressSpinnerModule,
     MatProgressBarModule,
+    ForceComponent,
   ],
   templateUrl: './connect.html',
   styleUrl: './connect.scss',
 })
 export class ConnectComponent implements AfterViewInit, OnDestroy {
-  worker!: Worker;
-
   showOverlay$ = computed(
     () => this.loading$() || !this.graphData$()?.nodes?.length
   );
+  svgSize$ = signal<{ width: number; height: number }>({
+    width: 100,
+    height: 100,
+  });
 
   detailUser$ = model<(GitHubDetailUser & { type: NodeType }) | null>(null);
 
@@ -58,7 +63,7 @@ export class ConnectComponent implements AfterViewInit, OnDestroy {
   filteredOptions$ = input<GitHubSearchUser[]>([]);
   loading$ = input<boolean>();
   searchLoading$ = input<boolean>();
-  graphData$ = model<{ nodes: GraphNode[]; links: GraphLink[] }>();
+  graphData$ = input<{ nodes: GraphNode[]; links: GraphLink[] }>();
 
   connectionsEmitter = output<void>();
   userSelectedEmitter = output<GitHubSearchUser>();
@@ -67,35 +72,26 @@ export class ConnectComponent implements AfterViewInit, OnDestroy {
   resizeObserver$!: ResizeObserver;
   resizeSubject$ = new BehaviorSubject(0);
 
-  nodes: GraphNode[] = [];
-  links: GraphLink[] = [];
 
-  @ViewChild('graph', { static: true }) graphSvgref!: ElementRef<SVGElement>;
+  @ViewChild('container', { static: true })
+  graphSvgref!: ElementRef<HTMLDivElement>;
 
   constructor() {
-    effect(() => {
-      const data = this.graphData$();
-      if (data?.nodes?.length && data?.links?.length) {
-        this.renderGraph(data);
-      }
-    });
-
     this.resizeSubject$
       .pipe(debounceTime(350), takeUntilDestroyed())
       .subscribe(() => {
-        const data = this.graphData$();
-        if (data) this.renderGraph(data);
+        const { width, height } =
+          this.graphSvgref.nativeElement?.getBoundingClientRect();
+        this.svgSize$.set({ width, height });
       });
   }
 
   ngAfterViewInit() {
-    const container = this.graphSvgref.nativeElement.parentElement;
+    const container = this.graphSvgref.nativeElement;
     if (!container) return;
-
     this.resizeObserver$ = new ResizeObserver(() => {
       this.resizeSubject$.next(this.resizeSubject$.value + 1);
     });
-
     this.resizeObserver$.observe(container);
   }
 
@@ -107,180 +103,4 @@ export class ConnectComponent implements AfterViewInit, OnDestroy {
     return user?.displayName || '';
   }
 
-  renderGraph(graph: { nodes: GraphNode[]; links: GraphLink[] }) {
-    const container = this.graphSvgref.nativeElement.parentElement;
-    if (!container) return;
-
-    const { width, height } = container.getBoundingClientRect();
-    d3.select(this.graphSvgref.nativeElement).selectAll('*').remove();
-
-    const svg = d3
-      .select(this.graphSvgref.nativeElement)
-      .attr('width', width)
-      .attr('height', height);
-
-    const graphGroup = svg.append('g');
-
-    const drag = d3
-      .drag<SVGGElement, GraphNode>()
-      .on('start', dragstarted)
-      .on('drag', dragged)
-      .on('end', dragended);
-
-    const link = graphGroup
-      .append('g')
-      .selectAll('line')
-      .data(graph.links)
-      .enter()
-      .append('line')
-      .attr('stroke', (d) =>
-        d.relationship === LinkType.MUTUAL
-          ? '#9c27b0'
-          : d.relationship === LinkType.FOLLOWER
-          ? '#1f77b4'
-          : '#ff7f0e'
-      )
-      .attr('stroke-width', 2);
-
-    // Group all nodes in <g> for easier transform
-    const nodeGroup = graphGroup
-      .append('g')
-      .selectAll('g')
-      .data(graph.nodes)
-      .enter()
-      .append('g')
-      .on('click', (event: PointerEvent, node: GraphNode) => {
-        if (!node?.data) return;
-        this.detailUser$.set({
-          ...node.data,
-          type: node.type,
-        } as GitHubDetailUser & { type: NodeType });
-      })
-      .call(drag);
-
-    const zoom = d3
-      .zoom<SVGSVGElement, unknown>()
-      .scaleExtent([0.25, 4])
-      .on('zoom', (event) => {
-        graphGroup.attr('transform', event.transform.toString());
-      });
-
-    svg.call(zoom as any);
-
-    // Center node with avatar image
-    nodeGroup
-      .filter((d) => d.type === 'center')
-      .append('image')
-      .attr('xlink:href', (d) => d.avatarUrl || '')
-      .attr('width', 40)
-      .attr('height', 40)
-      .attr('x', -20)
-      .attr('y', -20)
-
-    // Follower and following group nodes as colored circles
-    nodeGroup
-      .filter((d) => d.type !== 'center')
-      .append('circle')
-      .attr('r', 16)
-      .attr('fill', (d) =>
-        d.type === NodeType.FOLLOWER
-          ? '#1f77b4'
-          : d.type === NodeType.FOLLOWING
-          ? '#ff7f0e'
-          : d.type === NodeType.MUTUAL
-          ? '#9c27b0'
-          : '#999'
-      );
-
-    // Tooltips
-    nodeGroup.append('title').text((d) => {
-      if (d.type !== NodeType.CENTER) {
-        if (d.data) return d.id;
-        return d.followersCount
-          ? `Followers -  ${d.followersCount}`
-          : `Following -  ${d.followingCount}`;
-      }
-      return `${d.id}\nFollowers: ${d.followersCount}\nFollowing: ${d.followingCount}`;
-    });
-
-    const worker = new Worker(new URL('./force.worker.ts', import.meta.url), {
-      type: 'module',
-    });
-
-    worker.postMessage({
-      type: 'init',
-      payload: {
-        nodes: graph.nodes,
-        links: graph.links,
-        width,
-        height,
-      },
-    });
-
-    let lastUpdate = 0;
-    const MIN_INTERVAL = 30; // ms
-
-    worker.onmessage = ({ data }) => {
-      const now = performance.now();
-      if (now - lastUpdate < MIN_INTERVAL) return;
-
-      lastUpdate = now;
-
-      if (data.type !== 'tick') return;
-
-      const updatedNodes = data.nodes;
-      const updatedLinks = data.links;
-
-      // Create a map of node id -> node object for quick lookup
-      const nodeById = new Map(updatedNodes.map((n: GraphNode) => [n.id, n]));
-
-      // Replace link source and target IDs with node objects
-      const resolvedLinks = updatedLinks.map((link: GraphLink) => ({
-        ...link,
-        source:
-          typeof link.source === 'string'
-            ? nodeById.get(link.source)
-            : link.source,
-        target:
-          typeof link.target === 'string'
-            ? nodeById.get(link.target)
-            : link.target,
-      }));
-
-      // Update D3 selections with nodes and resolved links:
-      nodeGroup
-        .data(updatedNodes, (d: GraphNode) => d.id)
-        .attr('transform', (d) => `translate(${d.x ?? 0}, ${d.y ?? 0})`);
-
-      link
-        .data(resolvedLinks)
-        .attr('x1', (d: any) => d.source?.x ?? 0)
-        .attr('y1', (d: any) => d.source?.y ?? 0)
-        .attr('x2', (d: any) => d.target?.x ?? 0)
-        .attr('y2', (d: any) => d.target?.y ?? 0);
-    };
-
-    // Drag event handlers communicate with worker
-    function dragstarted(event: PointerEvent, d: GraphNode) {
-      worker.postMessage({ type: 'kick', alpha: 0.3 });
-      worker.postMessage({
-        type: 'drag',
-        payload: { id: d.id, fx: d.x, fy: d.y },
-      });
-    }
-
-    function dragged(event: PointerEvent, d: GraphNode) {
-      worker.postMessage({
-        type: 'drag',
-        payload: { id: d.id, fx: event.x, fy: event.y },
-      });
-    }
-
-    function dragended(event: PointerEvent, d: GraphNode) {
-      worker.postMessage({
-        type: 'end',
-        payload: { id: d.id },
-      });
-    }
-  }
 }

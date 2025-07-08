@@ -17,11 +17,13 @@ import {
   tap,
   finalize,
   Observable,
+  firstValueFrom,
 } from 'rxjs';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { GithubService } from '../../services/github.service';
 import { FormControl } from '@angular/forms';
 import {
+  GitHubCacheEntry,
   GitHubDetailUser,
   GitHubSearchUser,
   GraphLink,
@@ -29,6 +31,7 @@ import {
   LinkType,
   NodeType,
 } from '../../models/app.model';
+import { CacheDbService } from '../../services/cache-db.service';
 
 @Component({
   selector: 'app-connect-container',
@@ -56,6 +59,7 @@ import {
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ConnectContainer {
+  private cacheDbSvc = inject(CacheDbService);
   private githubSvc = inject(GithubService);
   private snackBar = inject(MatSnackBar);
   formControl = new FormControl<string>('', { nonNullable: true });
@@ -71,6 +75,8 @@ export class ConnectContainer {
   followingPage$ = signal(1);
   followersDone$ = signal<boolean>(false);
   followingDone$ = signal<boolean>(false);
+  followersAccumulated: GitHubSearchUser[] = [];
+  followingAccumulated: GitHubSearchUser[] = [];
 
   constructor() {
     this.formControl.valueChanges
@@ -109,8 +115,21 @@ export class ConnectContainer {
     window.open(url, '_blank');
   }
 
-  loadGraphForUser(user: GitHubSearchUser) {
+  async loadGraphForUser(user: GitHubSearchUser) {
     this.loading$.set(true);
+
+    const cached = await this.cacheDbSvc.getCachedUserData(user.displayName);
+
+    if (cached) {
+      this.selectedUser$.set({ ...cached.user, type: NodeType.CENTER });
+      this.graphData$.set({
+        nodes: cached.graphData.nodes,
+        links: cached.graphData.links,
+      });
+      this.loading$.set(false);
+      return;
+    }
+
     this.githubSvc
       .getUserByUsername(user.displayName)
       .pipe(
@@ -122,7 +141,6 @@ export class ConnectContainer {
       )
       .subscribe({
         next: (res) => {
-          console.log('this.selectedUser$()', this.selectedUser$());
           const centerNode: GraphNode = {
             id: res.displayName,
             avatarUrl: res.avatar,
@@ -174,140 +192,123 @@ export class ConnectContainer {
       });
   }
 
-  handleConnections() {
+  async handleConnections() {
     const user = this.selectedUser$();
     if (!user) return;
     this.loading$.set(true);
 
-    const observables: {
-      [key: string]: Observable<{
-        users: GitHubSearchUser[];
-        hasMore: boolean;
-      }>;
-    } = {};
+    try {
+      const cached = await this.cacheDbSvc.getCachedUserData(user.displayName);
 
-    if (!this.followersDone$()) {
-      observables['followers'] = this.githubSvc.getFollowers(
-        user.displayName,
-        this.followersPage$()
-      );
-    }
+      const existingFollowers = cached?.followers ?? [];
+      const existingFollowing = cached?.following ?? [];
 
-    if (!this.followingDone$()) {
-      observables['following'] = this.githubSvc.getFollowing(
-        user.displayName,
-        this.followingPage$()
-      );
-    }
+      const startFollowerPage = Math.floor(existingFollowers.length / 100) + 1;
+      const startFollowingPage = Math.floor(existingFollowing.length / 100) + 1;
 
-    if (Object.keys(observables).length === 0) {
-      this.loading$.set(false);
-      return; // nothing to fetch
-    }
+      const [newFollowers, newFollowing] = await Promise.all([
+        this.githubSvc.fetchUsersInBatches(
+          'followers',
+          user.displayName,
+          startFollowerPage
+        ),
+        this.githubSvc.fetchUsersInBatches(
+          'following',
+          user.displayName,
+          startFollowingPage
+        ),
+      ]);
 
-    // forkJoin({
-    //   followers: this.githubSvc.getFollowers(user.displayName, this.followersPage$()),
-    //   following: this.githubSvc.getFollowing(user.displayName, this.followingPage$()),
-    // }).subscribe({
-    forkJoin(observables).subscribe({
-      next: ({ followers, following }) => {
-        const centerNode: GraphNode = {
-          id: user.displayName,
-          avatarUrl: user.avatar,
-          type: NodeType.CENTER,
-          followersCount: user.followers,
-          followingCount: user.following,
-          data: user,
-        };
+      const allFollowers = [...existingFollowers, ...newFollowers];
+      const allFollowing = [...existingFollowing, ...newFollowing];
 
-        if (followers) {
-          if (!followers?.hasMore) this.followersDone$.set(true);
-          else this.followersPage$.update((p) => p + 1);
-        }
+      // Build graph
+      const centerNode: GraphNode = {
+        id: user.displayName,
+        avatarUrl: user.avatar,
+        type: NodeType.CENTER,
+        followersCount: user.followers,
+        followingCount: user.following,
+        data: user,
+      };
 
-        // Determine if we're done with following
-        if (following) {
-          console.log('following', following);
-          if (!following?.hasMore) this.followingDone$.set(true);
-          else this.followingPage$.update((p) => p + 1);
-        }
+      const followerMap = new Map(allFollowers.map((f) => [f.displayName, f]));
+      const followingMap = new Map(allFollowing.map((f) => [f.displayName, f]));
 
-        // Create maps for quick lookup
-        const followerMap = new Map(
-          followers.users?.map((f) => [f.displayName, f])
-        );
-        const followingMap = new Map(
-          following.users?.map((f) => [f.displayName, f])
-        );
+      const allIds = new Set([
+        ...allFollowers.map((f) => f.displayName),
+        ...allFollowing.map((f) => f.displayName),
+      ]);
 
-        // Collect all unique user IDs
-        const allIds = new Set([
-          ...followers.users?.map((f) => f.displayName),
-          ...following.users?.map((f) => f.displayName),
-        ]);
+      const nodes: GraphNode[] = [centerNode];
+      allIds.forEach((id) => {
+        const followerData = followerMap.get(id);
+        const followingData = followingMap.get(id);
+        const userData = followerData || followingData;
 
-        const nodes: GraphNode[] = [centerNode];
+        const nodeType: NodeType =
+          followerData && followingData
+            ? NodeType.MUTUAL
+            : followerData
+            ? NodeType.FOLLOWER
+            : NodeType.FOLLOWING;
 
-        allIds.forEach((id) => {
-          const followerData = followerMap.get(id);
-          const followingData = followingMap.get(id);
-          const userData = followerData || followingData;
-
-          const nodeType: NodeType =
-            followerData && followingData
-              ? NodeType.MUTUAL
-              : followerData
-              ? NodeType.FOLLOWER
-              : NodeType.FOLLOWING;
-
-          nodes.push({
-            id: id,
-            type: nodeType,
-            avatarUrl: userData?.avatar,
-            data: userData,
-          });
+        nodes.push({
+          id,
+          type: nodeType,
+          avatarUrl: userData?.avatar,
+          data: userData,
         });
+      });
 
-        const links: GraphLink[] = [];
+      const links: GraphLink[] = [];
 
-        // Add links
-        followers?.users.forEach((f) => {
+      allFollowers.forEach((f) => {
+        links.push({
+          source: f.displayName,
+          target: user.displayName,
+          relationship: LinkType.FOLLOWER,
+        });
+      });
+
+      allFollowing.forEach((f) => {
+        const existing = links.find(
+          (l) => l.source === f.displayName && l.target === user.displayName
+        );
+        if (existing) {
+          existing.relationship = LinkType.MUTUAL;
+        } else {
           links.push({
-            source: f.displayName,
-            target: user.displayName,
-            relationship: LinkType.FOLLOWER,
+            source: user.displayName,
+            target: f.displayName,
+            relationship: LinkType.FOLLOWING,
           });
-        });
+        }
+      });
 
-        following?.users.forEach((f) => {
-          const existing = links.find(
-            (l) => l.source === f.displayName && l.target === user.displayName
-          );
-          if (existing) {
-            existing.relationship = LinkType.MUTUAL;
-          } else {
-            links.push({
-              source: user.displayName,
-              target: f.displayName,
-              relationship: LinkType.FOLLOWING,
-            });
-          }
-        });
+      // Cache updated state
+      const cacheEntry: GitHubCacheEntry = {
+        id: user.displayName,
+        user,
+        followers: allFollowers,
+        following: allFollowing,
+        graphData: { nodes, links },
+        updatedAt: Date.now(),
+      };
 
-        this.graphData$.set({ nodes, links });
-      },
-      error: (err) => {
-        this.snackBar.open(
-          'Failed to fetch users from GitHub. Please try again later.',
-          'Close',
-          {
-            duration: 3000,
-            horizontalPosition: 'right',
-          }
-        );
-        console.error('Error loading GitHub data:', err);
-      },
-      complete: () => this.loading$.set(false),
-    });
+      await this.cacheDbSvc.cacheUserData(cacheEntry);
+
+      // Update UI
+      this.graphData$.set({ nodes, links });
+    } catch (err) {
+      this.snackBar.open(
+        'Failed to fetch users from GitHub. Please try again later.',
+        'Close',
+        { duration: 3000, horizontalPosition: 'right' }
+      );
+      console.error('Error loading GitHub data:', err);
+    } finally {
+      this.loading$.set(false);
+    }
   }
 }
